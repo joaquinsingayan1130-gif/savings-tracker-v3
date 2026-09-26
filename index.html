@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Savings Tracker</title>
+<meta name="theme-color" content="#2E6BFF">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Savings">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.json">
+<style>
+:root{
+  --bg:#F2F1F6; --card:#FFFFFF; --text:#15131C; --sub:#8A8792; --sep:rgba(0,0,0,.06);
+  --g1:#2E6BFF; --g2:#5AC8FA; --pink:#5A8FF6; --green:#22C58B; --red:#FF4D5E;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#0B0A10; --card:#1A1822; --text:#F5F4F8; --sub:#9490A0; --sep:rgba(255,255,255,.08); }
+}
+:root[data-theme="dark"]{ --bg:#0B0A10; --card:#1A1822; --text:#F5F4F8; --sub:#9490A0; --sep:rgba(255,255,255,.08); }
+*{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html{ scroll-padding-top:env(safe-area-inset-top,0px); }
+body{ margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',Roboto,sans-serif;
+  overflow-x:hidden; }
+.wrap{ max-width:480px; margin:0 auto; padding:calc(18px + env(safe-area-inset-top,0px)) 18px 100px; }
+
+h1.title{ font-size:2rem; font-weight:800; letter-spacing:-.02em; margin:0 0 2px; }
+p.subtitle{ color:var(--sub); font-size:.85rem; margin:0 0 22px; }
+
+/* Balance card */
+.balance-card{ background:var(--card); border-radius:18px; padding:18px 20px; margin-bottom:18px; cursor:pointer;
+  transition:transform .15s cubic-bezier(.2,.8,.2,1); border:1.5px dashed var(--sep); }
+.balance-card:active{ transform:scale(.97); }
+.bc-top{ display:flex; justify-content:space-between; align-items:center; }
+.bc-label{ font-size:.78rem; color:var(--sub); font-weight:700; text-transform:uppercase; letter-spacing:.03em; }
+.bc-edit{ font-size:.75rem; color:var(--g1); font-weight:700; }
+.bc-amt{ font-size:1.9rem; font-weight:800; margin-top:4px; background:linear-gradient(135deg,var(--g1),var(--g2));
+  -webkit-background-clip:text; background-clip:text; color:transparent; }
+.bc-hint{ font-size:.75rem; color:var(--sub); margin-top:2px; }
+
+/* Goal cards */
+.goal-card{ position:relative; border-radius:22px; padding:20px; margin-bottom:14px; color:#fff; overflow:hidden;
+  transition:transform .15s cubic-bezier(.2,.8,.2,1); cursor:pointer; }
+.goal-card:active{ transform:scale(.97); }
+.goal-card::after{ content:''; position:absolute; inset:0; background:radial-gradient(120px 90px at 90% -10%, rgba(255,255,255,.35), transparent 70%); }
+.gc-top{ display:flex; justify-content:space-between; align-items:flex-start; position:relative; z-index:1; }
+.gc-name{ font-size:1.05rem; font-weight:700; }
+.gc-pct{ font-size:.75rem; background:rgba(255,255,255,.22); padding:4px 9px; border-radius:20px; font-weight:600; }
+.gc-amt{ font-size:1.7rem; font-weight:800; margin-top:14px; position:relative; z-index:1; }
+.gc-of{ font-size:.8rem; opacity:.85; margin-top:1px; position:relative; z-index:1; }
+.gc-bar-bg{ height:6px; background:rgba(255,255,255,.25); border-radius:6px; margin-top:14px; position:relative; z-index:1; overflow:hidden; }
+.gc-bar-fill{ height:100%; background:#fff; border-radius:6px; transition:width .6s cubic-bezier(.2,.8,.2,1); }
+
+.empty{ text-align:center; color:var(--sub); padding:40px 10px; font-size:.9rem; }
+
+/* FAB */
+.fab{ position:fixed; right:20px; bottom:calc(24px + env(safe-area-inset-bottom,0px)); width:60px; height:60px; border-radius:50%;
+  background:linear-gradient(135deg,var(--g1),var(--g2)); border:none; color:#fff; font-size:1.8rem; font-weight:300;
+  box-shadow:0 8px 24px rgba(110,90,246,.45); transition:transform .15s cubic-bezier(.2,.8,.2,1); z-index:20; }
+.fab:active{ transform:scale(.9) rotate(90deg); }
+
+/* Detail panel (slides in from right) */
+.panel{ position:fixed; inset:0; background:var(--bg); transform:translateX(100%); transition:transform .32s cubic-bezier(.22,.9,.3,1); z-index:30; overflow-y:auto; }
+.panel.open{ transform:translateX(0); }
+.panel-top{ display:flex; align-items:center; gap:8px; padding:calc(14px + env(safe-area-inset-top,0px)) 14px 8px; }
+.icon-btn{ background:var(--card); border:none; width:38px; height:38px; border-radius:50%; color:var(--text); font-size:1.1rem; display:flex; align-items:center; justify-content:center; transition:transform .15s; }
+.icon-btn:active{ transform:scale(.88); }
+.panel-title{ flex:1; text-align:center; font-weight:700; font-size:1rem; }
+
+.ring-wrap{ display:flex; justify-content:center; margin:18px 0 6px; }
+.ring-amt{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.ring-amt .n{ font-size:1.7rem; font-weight:800; }
+.ring-amt .of{ color:var(--sub); font-size:.75rem; margin-top:2px; }
+
+.section-label{ font-size:.75rem; color:var(--sub); text-transform:uppercase; letter-spacing:.04em; font-weight:700; margin:24px 4px 8px; }
+.card{ background:var(--card); border-radius:18px; padding:6px 16px; }
+.entry-row{ display:flex; justify-content:space-between; align-items:center; padding:13px 0; border-bottom:1px solid var(--sep); }
+.entry-row:last-child{ border-bottom:none; }
+.entry-row .amt{ font-weight:700; }
+.entry-row .meta{ color:var(--sub); font-size:.78rem; margin-top:1px; }
+.entry-del{ background:none; border:none; color:var(--red); font-size:.8rem; font-weight:600; padding:6px; opacity:.85; }
+.entry-edit{ background:none; border:none; color:var(--g1); font-size:.8rem; font-weight:600; padding:6px; opacity:.9; }
+.entry-actions{ display:flex; align-items:center; gap:2px; }
+
+.quick-add{ display:flex; gap:10px; margin-top:14px; }
+.quick-btn{ flex:1; background:var(--card); border:none; border-radius:14px; padding:12px 0; font-weight:700; color:var(--text); font-size:.95rem; transition:transform .15s; }
+.quick-btn:active{ transform:scale(.94); }
+
+.danger-btn{ width:100%; background:none; border:none; color:var(--red); font-weight:600; padding:16px 0; font-size:.95rem; margin-top:26px; }
+
+/* Bottom sheet */
+.sheet-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.45); backdrop-filter:blur(6px); opacity:0; pointer-events:none; transition:opacity .25s; z-index:40; }
+.sheet-backdrop.open{ opacity:1; pointer-events:auto; }
+.sheet{ position:fixed; left:0; right:0; bottom:0; background:var(--card); border-radius:26px 26px 0 0; padding:14px 20px calc(24px + env(safe-area-inset-bottom,0px)); transform:translateY(100%); transition:transform .32s cubic-bezier(.22,.9,.3,1); z-index:41; max-height:82vh; overflow-y:auto; }
+.sheet.open{ transform:translateY(0); }
+.sheet-handle{ width:36px; height:5px; background:var(--sep); border-radius:4px; margin:0 auto 16px; }
+.sheet h3{ margin:0 0 16px; font-size:1.15rem; font-weight:800; }
+.field{ margin-bottom:14px; }
+.field label{ display:block; font-size:.78rem; color:var(--sub); margin-bottom:5px; font-weight:600; }
+.field input{ width:100%; border:none; background:var(--bg); border-radius:12px; padding:13px 14px; font-size:1.05rem; color:var(--text); outline:none; }
+.chip-row{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+.chip{ background:var(--bg); border:none; border-radius:20px; padding:8px 14px; font-size:.85rem; color:var(--text); font-weight:600; transition:transform .12s; }
+.chip.active{ background:linear-gradient(135deg,var(--g1),var(--g2)); color:#fff; }
+.chip:active{ transform:scale(.92); }
+.btn-primary{ width:100%; border:none; border-radius:14px; padding:15px; font-size:1rem; font-weight:700; color:#fff;
+  background:linear-gradient(135deg,var(--g1),var(--g2)); margin-top:6px; transition:transform .15s; }
+.btn-primary:active{ transform:scale(.97); }
+
+.hidden{ display:none !important; }
+
+/* Toast */
+.toast{ position:fixed; left:50%; bottom:calc(100px + env(safe-area-inset-bottom,0px)); transform:translateX(-50%) translateY(20px);
+  background:#000; color:#fff; padding:12px 18px; border-radius:30px; font-size:.88rem; font-weight:600;
+  opacity:0; pointer-events:none; transition:opacity .25s, transform .25s; z-index:60; box-shadow:0 8px 20px rgba(0,0,0,.3); white-space:nowrap; }
+.toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* Confetti */
+.confetti-piece{ position:fixed; top:-12px; width:9px; height:15px; opacity:.95; pointer-events:none; z-index:100;
+  animation:confetti-fall linear forwards; }
+@keyframes confetti-fall{ to{ transform:translateY(112vh) rotate(720deg); opacity:0; } }
+</style>
+</head>
+<body>
+
+<div class="wrap" id="mainView">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <h1 class="title">Goals</h1>
+    <button class="icon-btn" id="settingsBtn">⚙</button>
+  </div>
+  <p class="subtitle" id="totalLine">Start saving toward something</p>
+
+  <div class="balance-card" id="balanceCard" onclick="openBalanceSheet()">
+    <div class="bc-top"><span class="bc-label">Available Balance</span><span class="bc-edit">Edit</span></div>
+    <div class="bc-amt" id="balanceAmt">₱0.00</div>
+    <div class="bc-hint">The money you have on hand right now</div>
+  </div>
+
+  <div id="goalsList"></div>
+</div>
+<button class="fab" id="fab">+</button>
+
+<!-- DETAIL PANEL -->
+<div class="panel" id="detailPanel">
+  <div class="panel-top">
+    <button class="icon-btn" id="backBtn">‹</button>
+    <div class="panel-title" id="detTitle">Goal</div>
+    <button class="icon-btn" id="editGoalBtn" style="font-size:.85rem">✎</button>
+  </div>
+  <div class="wrap" style="padding-top:6px">
+    <div style="position:relative" class="ring-wrap">
+      <svg width="180" height="180" viewBox="0 0 180 180">
+        <circle cx="90" cy="90" r="78" fill="none" stroke="var(--sep)" stroke-width="14"/>
+        <circle id="ringFill" cx="90" cy="90" r="78" fill="none" stroke="url(#grad)" stroke-width="14" stroke-linecap="round"
+          transform="rotate(-90 90 90)" stroke-dasharray="490" stroke-dashoffset="490" style="transition:stroke-dashoffset .8s cubic-bezier(.2,.8,.2,1)"/>
+        <defs><linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#2E6BFF"/><stop offset="100%" stop-color="#5AC8FA"/>
+        </linearGradient></defs>
+      </svg>
+      <div class="ring-amt"><div class="n" id="detAmt">₱0</div><div class="of" id="detOf">of ₱0</div></div>
+    </div>
+
+    <div class="card" id="insightCard" style="padding:16px; margin-bottom:14px;"></div>
+
+    <div class="quick-add">
+      <button class="quick-btn" id="quickAddBtn">＋ Add Savings</button>
+    </div>
+
+    <div class="section-label">History</div>
+    <div class="card" id="entryList"></div>
+
+    <button class="danger-btn" id="deleteGoalBtn">Delete Goal</button>
+  </div>
+</div>
+
+<!-- BOTTOM SHEET: New Goal -->
+<div class="sheet-backdrop" id="goalBackdrop"></div>
+<div class="sheet" id="goalSheet">
+  <div class="sheet-handle"></div>
+  <h3>New Goal</h3>
+  <div class="field"><label>What are you saving for?</label><input id="goalNameInput" type="text" placeholder="New Phone"></div>
+  <div class="field"><label>Target amount</label><input id="goalTargetInput" type="number" step="0.01" min="0.01" placeholder="0.00" inputmode="decimal"></div>
+  <button class="btn-primary" id="saveGoalBtn">Create Goal</button>
+</div>
+
+<!-- BOTTOM SHEET: Add Entry -->
+<div class="sheet-backdrop" id="entryBackdrop"></div>
+<div class="sheet" id="entrySheet">
+  <div class="sheet-handle"></div>
+  <h3 id="entrySheetTitle">Add Savings</h3>
+  <div class="field"><label>Amount</label><input id="amtInput" type="number" step="0.01" min="0.01" placeholder="0.00" inputmode="decimal"></div>
+  <div class="chip-row" id="quickChips"></div>
+  <div class="field"><label>Label</label><input id="labelInput" type="text" placeholder="e.g. Bonus, allowance"></div>
+  <div class="field"><label>Date</label><input id="entryDateInput" type="date"></div>
+  <button class="btn-primary" id="addEntryBtn">Add</button>
+</div>
+
+<!-- BOTTOM SHEET: Balance -->
+<div class="sheet-backdrop" id="balanceBackdrop"></div>
+<div class="sheet" id="balanceSheet">
+  <div class="sheet-handle"></div>
+  <h3>Available Balance</h3>
+  <div class="field"><label>Amount</label><input id="balanceAmtInput" type="number" step="0.01" min="0.01" placeholder="0.00" inputmode="decimal"></div>
+  <div class="field"><label>Label (optional)</label><input id="balanceLabelInput" type="text" placeholder="e.g. Payday, bought lunch"></div>
+  <div class="quick-add">
+    <button class="quick-btn" id="balanceAddBtn">＋ Add</button>
+    <button class="quick-btn" id="balanceSubBtn">− Subtract</button>
+  </div>
+  <div class="section-label">History</div>
+  <div class="card" id="balanceHistoryList"></div>
+</div>
+
+<!-- BOTTOM SHEET: Edit Goal -->
+<div class="sheet-backdrop" id="editGoalBackdrop"></div>
+<div class="sheet" id="editGoalSheet">
+  <div class="sheet-handle"></div>
+  <h3>Edit Goal</h3>
+  <div class="field"><label>Name</label><input id="editGoalNameInput" type="text" placeholder="Goal name"></div>
+  <div class="field"><label>Target amount</label><input id="editGoalTargetInput" type="number" step="0.01" min="0.01" placeholder="0.00" inputmode="decimal"></div>
+  <button class="btn-primary" id="editGoalSaveBtn">Save Changes</button>
+</div>
+
+<!-- BOTTOM SHEET: Backup & Restore -->
+<div class="sheet-backdrop" id="settingsBackdrop"></div>
+<div class="sheet" id="settingsSheet">
+  <div class="sheet-handle"></div>
+  <h3>Backup &amp; Restore</h3>
+  <p style="color:var(--sub); font-size:.85rem; margin:-10px 0 16px;">Your data lives only on this device. Back it up so you don't lose it if you clear your browser or switch phones.</p>
+  <button class="quick-btn" id="exportCopyBtn" style="width:100%">📋 Copy Backup to Clipboard</button>
+  <button class="quick-btn" id="exportDownloadBtn" style="width:100%; margin-top:10px">⬇ Download Backup File</button>
+
+  <div class="section-label">Restore from Backup</div>
+  <div class="field"><label>Paste backup text here</label>
+    <textarea id="importTextarea" rows="4" placeholder="Paste your backup JSON..."
+      style="width:100%; border:none; background:var(--bg); border-radius:12px; padding:12px; color:var(--text); font-size:.8rem; font-family:ui-monospace,monospace; resize:vertical;"></textarea>
+  </div>
+  <button class="btn-primary" id="importBtn">Restore Backup</button>
+</div>
+
+<!-- CONFIRM SHEET (generic) -->
+<div class="sheet-backdrop" id="confirmBackdrop"></div>
+<div class="sheet" id="confirmSheet" style="text-align:center">
+  <div class="sheet-handle"></div>
+  <h3 id="confirmTitle">Are you sure?</h3>
+  <p id="confirmMsg" style="color:var(--sub); font-size:.88rem; margin:-8px 0 18px;"></p>
+  <button class="btn-primary" id="confirmYesBtn" style="background:var(--red)">Delete</button>
+  <button class="quick-btn" id="confirmNoBtn" style="margin-top:10px; width:100%">Cancel</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const BAL_KEY="wallet_balance";
+const KEY="savings_goals";
+const GRADIENTS=["linear-gradient(135deg,#2E6BFF,#5AC8FA)","linear-gradient(135deg,#1E3FE0,#4A8DFF)",
+  "linear-gradient(135deg,#0EA5E9,#5AC8FA)","linear-gradient(135deg,#3A5AFF,#7FD8FF)","linear-gradient(135deg,#1C4ED8,#38BDF8)"];
+function load(){ try{ const v=localStorage.getItem(KEY); return v?JSON.parse(v):[]; }catch(e){ return []; } }
+function save(g){ try{ localStorage.setItem(KEY, JSON.stringify(g)); }catch(e){} }
+let goals=load(); let activeGoalId=null;
+const today=new Date().toISOString().slice(0,10);
+function fmt(n){ return '₱'+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+// Toast (replaces alert() which can silently fail in standalone iOS PWAs)
+let toastTimer=null;
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.classList.add('show');
+  if(navigator.vibrate) navigator.vibrate(15);
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+// Confetti celebration
+function launchConfetti(){
+  const colors=['#2E6BFF','#5AC8FA','#34D399','#FBBF24','#F87171','#A78BFA'];
+  const shapes=['50%','2px'];
+  for(let i=0;i<44;i++){
+    const el=document.createElement('div');
+    el.className='confetti-piece';
+    el.style.left=Math.random()*100+'vw';
+    el.style.background=colors[Math.floor(Math.random()*colors.length)];
+    el.style.borderRadius=shapes[Math.floor(Math.random()*shapes.length)];
+    el.style.animationDuration=(2.2+Math.random()*1.4)+'s';
+    el.style.animationDelay=(Math.random()*0.35)+'s';
+    document.body.appendChild(el);
+    setTimeout(()=>el.remove(), 4200);
+  }
+  if(navigator.vibrate) navigator.vibrate([60,40,60,40,120]);
+}
+
+// Confirm sheet (replaces confirm() which can silently fail in standalone iOS PWAs)
+let confirmCallback=null;
+function showConfirm(title,msg,onYes,yesLabel,danger){
+  document.getElementById('confirmTitle').textContent=title;
+  document.getElementById('confirmMsg').textContent=msg;
+  const yesBtn=document.getElementById('confirmYesBtn');
+  yesBtn.textContent=yesLabel||'Delete';
+  yesBtn.style.background = (danger===false) ? 'linear-gradient(135deg,var(--g1),var(--g2))' : 'var(--red)';
+  confirmCallback=onYes;
+  openSheet('confirmSheet','confirmBackdrop');
+}
+document.getElementById('confirmYesBtn').addEventListener('click', ()=>{
+  closeSheet('confirmSheet','confirmBackdrop');
+  const cb=confirmCallback; confirmCallback=null;
+  if(cb) cb();
+});
+document.getElementById('confirmNoBtn').addEventListener('click', ()=>{
+  closeSheet('confirmSheet','confirmBackdrop'); confirmCallback=null;
+});
+document.getElementById('confirmBackdrop').addEventListener('click', ()=>{
+  closeSheet('confirmSheet','confirmBackdrop'); confirmCallback=null;
+});
+
+function loadBalanceTxns(){
+  try{
+    const v=localStorage.getItem(BAL_KEY);
+    if(!v) return [];
+    const parsed=JSON.parse(v);
+    if(Array.isArray(parsed)) return parsed;
+    // migrate old single-number format into a starting transaction
+    const n=parseFloat(parsed);
+    if(!isNaN(n) && n>0){
+      return [{id:'migrated', type:'add', amount:n, label:'Previous balance', date:new Date().toISOString().slice(0,10)}];
+    }
+    return [];
+  }catch(e){ return []; }
+}
+function saveBalanceTxns(t){ try{ localStorage.setItem(BAL_KEY, JSON.stringify(t)); }catch(e){} }
+let balanceTxns=loadBalanceTxns();
+function balanceTotal(){ return balanceTxns.reduce((s,t)=> s + (t.type==='add'?t.amount:-t.amount), 0); }
+function renderBalance(){
+  document.getElementById('balanceAmt').textContent=fmt(Math.max(0,balanceTotal()));
+  const list=document.getElementById('balanceHistoryList');
+  if(!balanceTxns.length){ list.innerHTML='<div class="empty">No history yet</div>'; return; }
+  const sorted=[...balanceTxns].sort((a,b)=>b.date.localeCompare(a.date));
+  list.innerHTML=sorted.map(t=>`<div class="entry-row">
+      <div><div class="amt" style="color:${t.type==='add'?'var(--green)':'var(--red)'}">${t.type==='add'?'+':'−'}${fmt(t.amount)}</div>
+      <div class="meta">${t.label?t.label+' · ':''}${t.date}</div></div>
+      <button class="entry-del" onclick="delBalanceTxn('${t.id}')">Remove</button>
+    </div>`).join('');
+}
+function delBalanceTxn(id){ balanceTxns=balanceTxns.filter(t=>t.id!==id); saveBalanceTxns(balanceTxns); renderBalance(); showToast('Entry removed'); }
+window.delBalanceTxn=delBalanceTxn;
+function openBalanceSheet(){
+  document.getElementById('balanceAmtInput').value='';
+  document.getElementById('balanceLabelInput').value='';
+  renderBalance();
+  openSheet('balanceSheet','balanceBackdrop');
+}
+window.openBalanceSheet=openBalanceSheet;
+function totalSaved(g){ return g.entries.reduce((s,e)=>s+e.amount,0); }
+
+function renderList(){
+  const wrap=document.getElementById('goalsList');
+  const totalAll = goals.reduce((s,g)=>s+totalSaved(g),0);
+  document.getElementById('totalLine').textContent = goals.length ? `${fmt(totalAll)} saved across ${goals.length} goal${goals.length>1?'s':''}` : 'Start saving toward something';
+  if(!goals.length){ wrap.innerHTML='<div class="empty">No goals yet — tap + to start one 🎯</div>'; return; }
+  wrap.innerHTML = goals.map((g,i)=>{
+    const saved=totalSaved(g), pct=Math.min(100,(saved/g.target*100)||0), done=saved>=g.target;
+    return `<div class="goal-card" style="background:${GRADIENTS[i%GRADIENTS.length]}" onclick="openGoal('${g.id}')">
+      <div class="gc-top"><span class="gc-name">${g.name}</span><span class="gc-pct">${done?'🎉 Done':pct.toFixed(0)+'%'}</span></div>
+      <div class="gc-amt">${fmt(saved)}</div>
+      <div class="gc-of">of ${fmt(g.target)} goal</div>
+      <div class="gc-bar-bg"><div class="gc-bar-fill" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function openGoal(id){
+  activeGoalId=id;
+  const g=goals.find(x=>x.id===id);
+  document.getElementById('detTitle').textContent=g.name;
+  renderDetail();
+  document.getElementById('detailPanel').classList.add('open');
+}
+window.openGoal=openGoal;
+document.getElementById('backBtn').addEventListener('click', ()=>{
+  document.getElementById('detailPanel').classList.remove('open'); renderList();
+});
+
+document.getElementById('editGoalBtn').addEventListener('click', ()=>{
+  const g=goals.find(x=>x.id===activeGoalId);
+  document.getElementById('editGoalNameInput').value=g.name;
+  document.getElementById('editGoalTargetInput').value=g.target;
+  openSheet('editGoalSheet','editGoalBackdrop');
+});
+document.getElementById('editGoalBackdrop').addEventListener('click', ()=>closeSheet('editGoalSheet','editGoalBackdrop'));
+document.getElementById('editGoalSaveBtn').addEventListener('click', ()=>{
+  const name=document.getElementById('editGoalNameInput').value.trim();
+  const target=parseFloat(document.getElementById('editGoalTargetInput').value);
+  if(!name||!target||target<=0){ showToast('Enter a goal name and target amount'); return; }
+  const g=goals.find(x=>x.id===activeGoalId);
+  g.name=name; g.target=target;
+  save(goals);
+  document.getElementById('detTitle').textContent=name;
+  closeSheet('editGoalSheet','editGoalBackdrop');
+  renderDetail();
+  showToast('Goal updated');
+});
+
+function renderInsight(g, saved){
+  const el=document.getElementById('insightCard');
+  if(saved>=g.target){
+    el.innerHTML=`<div style="font-weight:700;">🎉 Goal complete — nice work!</div>`;
+    return;
+  }
+  if(!g.entries.length){
+    el.innerHTML=`<div style="color:var(--sub); font-size:.85rem;">Add your first entry to see a savings pace and projected finish date.</div>`;
+    return;
+  }
+  const sorted=[...g.entries].sort((a,b)=>a.date.localeCompare(b.date));
+  const first=new Date(sorted[0].date+'T00:00:00');
+  const now=new Date(today+'T00:00:00');
+  const daysElapsed=Math.max(1, Math.round((now-first)/86400000));
+  const perWeek=(saved/daysElapsed)*7;
+  if(perWeek<=0){
+    el.innerHTML=`<div style="color:var(--sub); font-size:.85rem;">Keep adding savings to see your pace and projected finish date.</div>`;
+    return;
+  }
+  const remaining=g.target-saved;
+  const daysNeeded=Math.ceil(remaining/(perWeek/7));
+  const projected=new Date(now.getTime()+daysNeeded*86400000);
+  const projStr=projected.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+  el.innerHTML=`
+    <div style="font-size:.72rem; color:var(--sub); font-weight:700; text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px;">Your Pace</div>
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <div style="font-weight:800; font-size:1.1rem;">${fmt(perWeek)}<span style="font-size:.75rem; color:var(--sub); font-weight:600;">/week</span></div>
+    </div>
+    <div style="color:var(--sub); font-size:.82rem; margin-top:4px;">At this pace, you'll hit your goal around <b style="color:var(--text)">${projStr}</b></div>`;
+}
+
+function renderDetail(){
+  const g=goals.find(x=>x.id===activeGoalId);
+  const saved=totalSaved(g), pct=Math.min(100,(saved/g.target*100)||0);
+  document.getElementById('detAmt').textContent=fmt(saved);
+  document.getElementById('detOf').textContent='of '+fmt(g.target);
+  const circumference=490;
+  document.getElementById('ringFill').style.strokeDashoffset = circumference - (pct/100*circumference);
+  renderInsight(g, saved);
+  const list=document.getElementById('entryList');
+  if(!g.entries.length){ list.innerHTML='<div class="empty">No entries yet</div>'; return; }
+  const sorted=[...g.entries].sort((a,b)=>b.date.localeCompare(a.date));
+  list.innerHTML=sorted.map(e=>`<div class="entry-row">
+      <div><div class="amt">${fmt(e.amount)}</div><div class="meta">${e.label?e.label+' · ':''}${e.date}</div></div>
+      <div class="entry-actions">
+        <button class="entry-edit" onclick="editEntry('${e.id}')">Edit</button>
+        <button class="entry-del" onclick="delEntry('${e.id}')">Remove</button>
+      </div>
+    </div>`).join('');
+}
+let editingEntryId=null;
+function editEntry(id){
+  const g=goals.find(x=>x.id===activeGoalId);
+  const e=g.entries.find(x=>x.id===id);
+  editingEntryId=id;
+  document.getElementById('entrySheetTitle').textContent='Edit Entry';
+  document.getElementById('addEntryBtn').textContent='Save Changes';
+  document.getElementById('amtInput').value=e.amount;
+  document.getElementById('labelInput').value=e.label||'';
+  document.getElementById('entryDateInput').value=e.date;
+  document.querySelectorAll('#quickChips .chip').forEach(c=>c.classList.remove('active'));
+  openSheet('entrySheet','entryBackdrop');
+}
+window.editEntry=editEntry;
+function delEntry(id){
+  const g=goals.find(x=>x.id===activeGoalId);
+  g.entries=g.entries.filter(e=>e.id!==id);
+  save(goals); renderDetail(); renderList();
+  showToast('Entry removed');
+}
+window.delEntry=delEntry;
+
+// Sheets
+function openSheet(sheetId, backdropId){ document.getElementById(sheetId).classList.add('open'); document.getElementById(backdropId).classList.add('open'); }
+function closeSheet(sheetId, backdropId){ document.getElementById(sheetId).classList.remove('open'); document.getElementById(backdropId).classList.remove('open'); }
+
+document.getElementById('fab').addEventListener('click', ()=>{
+  document.getElementById('goalNameInput').value=''; document.getElementById('goalTargetInput').value='';
+  openSheet('goalSheet','goalBackdrop');
+});
+document.getElementById('goalBackdrop').addEventListener('click', ()=>closeSheet('goalSheet','goalBackdrop'));
+document.getElementById('saveGoalBtn').addEventListener('click', ()=>{
+  const name=document.getElementById('goalNameInput').value.trim();
+  const target=parseFloat(document.getElementById('goalTargetInput').value);
+  if(!name||!target||target<=0){ showToast('Enter a goal name and target amount'); return; }
+  goals.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2), name, target, entries:[]});
+  save(goals); closeSheet('goalSheet','goalBackdrop'); renderList();
+  showToast('Goal created 🎯');
+});
+
+const QUICK_AMOUNTS=[20,50,100,200,500];
+document.getElementById('quickChips').innerHTML = QUICK_AMOUNTS.map(a=>`<button class="chip" data-a="${a}">₱${a}</button>`).join('');
+document.getElementById('quickChips').addEventListener('click', e=>{
+  const btn=e.target.closest('.chip'); if(!btn) return;
+  document.querySelectorAll('#quickChips .chip').forEach(c=>c.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('amtInput').value = btn.dataset.a;
+});
+document.getElementById('quickAddBtn').addEventListener('click', ()=>{
+  editingEntryId=null;
+  document.getElementById('entrySheetTitle').textContent='Add Savings';
+  document.getElementById('addEntryBtn').textContent='Add';
+  document.getElementById('amtInput').value=''; document.getElementById('labelInput').value='';
+  document.getElementById('entryDateInput').value=today;
+  document.querySelectorAll('#quickChips .chip').forEach(c=>c.classList.remove('active'));
+  openSheet('entrySheet','entryBackdrop');
+});
+document.getElementById('entryBackdrop').addEventListener('click', ()=>{ closeSheet('entrySheet','entryBackdrop'); editingEntryId=null; });
+document.getElementById('addEntryBtn').addEventListener('click', ()=>{
+  const amount=parseFloat(document.getElementById('amtInput').value);
+  if(!amount||amount<=0){ showToast('Enter a valid amount'); return; }
+  const date=document.getElementById('entryDateInput').value || today;
+  const label=document.getElementById('labelInput').value.trim();
+  const g=goals.find(x=>x.id===activeGoalId);
+  const wasDone = totalSaved(g) >= g.target;
+
+  if(editingEntryId){
+    const e=g.entries.find(x=>x.id===editingEntryId);
+    e.amount=Math.round(amount*100)/100; e.label=label; e.date=date;
+    editingEntryId=null;
+    save(goals);
+    closeSheet('entrySheet','entryBackdrop'); renderDetail(); renderList();
+    showToast('Entry updated');
+    return;
+  }
+
+  g.entries.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2), amount:Math.round(amount*100)/100,
+    label, date});
+  save(goals);
+  closeSheet('entrySheet','entryBackdrop'); renderDetail(); renderList();
+  const nowDone = totalSaved(g) >= g.target;
+  if(nowDone && !wasDone) launchConfetti();
+  showToast(nowDone && !wasDone ? `🎉 "${g.name}" goal reached!` : 'Savings added');
+});
+
+document.getElementById('balanceBackdrop').addEventListener('click', ()=>closeSheet('balanceSheet','balanceBackdrop'));
+document.getElementById('balanceAddBtn').addEventListener('click', ()=>{
+  const amt=parseFloat(document.getElementById('balanceAmtInput').value);
+  if(!amt||amt<=0){ showToast('Enter a valid amount'); return; }
+  balanceTxns.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2), type:'add', amount:Math.round(amt*100)/100,
+    label:document.getElementById('balanceLabelInput').value.trim(), date:today});
+  saveBalanceTxns(balanceTxns); renderBalance();
+  document.getElementById('balanceAmtInput').value=''; document.getElementById('balanceLabelInput').value='';
+  showToast('Added to balance');
+});
+document.getElementById('balanceSubBtn').addEventListener('click', ()=>{
+  const amt=parseFloat(document.getElementById('balanceAmtInput').value);
+  if(!amt||amt<=0){ showToast('Enter a valid amount'); return; }
+  balanceTxns.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2), type:'subtract', amount:Math.round(amt*100)/100,
+    label:document.getElementById('balanceLabelInput').value.trim(), date:today});
+  saveBalanceTxns(balanceTxns); renderBalance();
+  document.getElementById('balanceAmtInput').value=''; document.getElementById('balanceLabelInput').value='';
+  showToast('Subtracted from balance');
+});
+
+document.getElementById('deleteGoalBtn').addEventListener('click', ()=>{
+  const g=goals.find(x=>x.id===activeGoalId);
+  showConfirm('Delete Goal?', `This removes "${g.name}" and all ${g.entries.length} history entr${g.entries.length===1?'y':'ies'} for it.`, ()=>{
+    goals=goals.filter(x=>x.id!==activeGoalId);
+    save(goals);
+    document.getElementById('detailPanel').classList.remove('open'); renderList();
+    showToast('Goal deleted');
+  });
+});
+
+// Backup & Restore
+document.getElementById('settingsBtn').addEventListener('click', ()=>{
+  document.getElementById('importTextarea').value='';
+  openSheet('settingsSheet','settingsBackdrop');
+});
+document.getElementById('settingsBackdrop').addEventListener('click', ()=>closeSheet('settingsSheet','settingsBackdrop'));
+
+function buildBackup(){
+  return JSON.stringify({ app:'savings-tracker', exportedAt:new Date().toISOString(), goals, balance:balanceTxns }, null, 2);
+}
+
+document.getElementById('exportCopyBtn').addEventListener('click', async ()=>{
+  const text=buildBackup();
+  try{
+    await navigator.clipboard.writeText(text);
+    showToast('Backup copied to clipboard');
+  }catch(e){
+    try{
+      const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('Backup copied to clipboard');
+    }catch(e2){ showToast('Copy failed — try Download instead'); }
+  }
+});
+
+document.getElementById('exportDownloadBtn').addEventListener('click', ()=>{
+  try{
+    const text=buildBackup();
+    const blob=new Blob([text], {type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='savings-backup-'+today+'.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    showToast('Backup file downloading');
+  }catch(e){ showToast('Download failed — try Copy instead'); }
+});
+
+document.getElementById('importBtn').addEventListener('click', ()=>{
+  const raw=document.getElementById('importTextarea').value.trim();
+  if(!raw){ showToast('Paste your backup text first'); return; }
+  let parsed;
+  try{ parsed=JSON.parse(raw); }
+  catch(e){ showToast("That doesn't look like valid backup text"); return; }
+  if(!parsed || !Array.isArray(parsed.goals)){ showToast('Backup format not recognized'); return; }
+  showConfirm('Restore Backup?', 'This replaces all current goals and balance history on this device with the backup.', ()=>{
+    goals=parsed.goals;
+    balanceTxns=Array.isArray(parsed.balance) ? parsed.balance : [];
+    save(goals); saveBalanceTxns(balanceTxns);
+    renderList(); renderBalance();
+    closeSheet('settingsSheet','settingsBackdrop');
+    showToast('Backup restored');
+  }, 'Restore', false);
+});
+
+renderList();
+renderBalance();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "Savings Tracker",
+  "short_name": "Savings",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0B0A10",
+  "theme_color": "#2E6BFF",
+  "icons": [
+    { "src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
