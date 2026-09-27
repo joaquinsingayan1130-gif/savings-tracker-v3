@@ -165,6 +165,7 @@ p.subtitle{ color:var(--sub); font-size:.85rem; margin:0 0 22px; }
 
     <div class="quick-add">
       <button class="quick-btn" id="quickAddBtn">＋ Add Savings</button>
+      <button class="quick-btn" id="transferQuickBtn">🔁 Transfer</button>
     </div>
 
     <div class="section-label">History</div>
@@ -181,6 +182,7 @@ p.subtitle{ color:var(--sub); font-size:.85rem; margin:0 0 22px; }
   <h3>New Goal</h3>
   <div class="field"><label>What are you saving for?</label><input id="goalNameInput" type="text" placeholder="New Phone"></div>
   <div class="field"><label>Target amount</label><input id="goalTargetInput" type="number" step="0.01" min="0.01" placeholder="0.00" inputmode="decimal"></div>
+  <div class="field"><label>Target date (optional)</label><input id="goalDeadlineInput" type="date"></div>
   <button class="btn-primary" id="saveGoalBtn">Create Goal</button>
 </div>
 
@@ -196,13 +198,24 @@ p.subtitle{ color:var(--sub); font-size:.85rem; margin:0 0 22px; }
   <button class="btn-primary" id="addEntryBtn">Add</button>
 </div>
 
+<!-- BOTTOM SHEET: Transfer -->
+<div class="sheet-backdrop" id="transferBackdrop"></div>
+<div class="sheet" id="transferSheet">
+  <div class="sheet-handle"></div>
+  <h3>Transfer to Another Goal</h3>
+  <div class="field"><label>Amount</label><input id="transferAmtInput" type="number" step="0.01" min="0.01" placeholder="0.00" inputmode="decimal"></div>
+  <div class="field"><label>Move to</label><select id="transferDestSelect" style="width:100%; border:none; background:var(--bg); border-radius:12px; padding:13px 14px; font-size:1.05rem; color:var(--text);"></select></div>
+  <button class="btn-primary" id="transferBtn">Transfer</button>
+</div>
+
 <!-- BOTTOM SHEET: Balance -->
 <div class="sheet-backdrop" id="balanceBackdrop"></div>
 <div class="sheet" id="balanceSheet">
   <div class="sheet-handle"></div>
-  <h3>Available Balance</h3>
+  <h3 id="balanceSheetTitle">Available Balance</h3>
   <div class="field"><label>Amount</label><input id="balanceAmtInput" type="number" step="0.01" min="0.01" placeholder="0.00" inputmode="decimal"></div>
   <div class="field"><label>Label (optional)</label><input id="balanceLabelInput" type="text" placeholder="e.g. Payday, bought lunch"></div>
+  <div class="field"><label>Date</label><input id="balanceDateInput" type="date"></div>
   <div class="quick-add">
     <button class="quick-btn" id="balanceAddBtn">＋ Add</button>
     <button class="quick-btn" id="balanceSubBtn">− Subtract</button>
@@ -218,6 +231,7 @@ p.subtitle{ color:var(--sub); font-size:.85rem; margin:0 0 22px; }
   <h3>Edit Goal</h3>
   <div class="field"><label>Name</label><input id="editGoalNameInput" type="text" placeholder="Goal name"></div>
   <div class="field"><label>Target amount</label><input id="editGoalTargetInput" type="number" step="0.01" min="0.01" placeholder="0.00" inputmode="decimal"></div>
+  <div class="field"><label>Target date (optional)</label><input id="editGoalDeadlineInput" type="date"></div>
   <button class="btn-primary" id="editGoalSaveBtn">Save Changes</button>
 </div>
 
@@ -338,14 +352,31 @@ function renderBalance(){
   list.innerHTML=sorted.map(t=>`<div class="entry-row">
       <div><div class="amt" style="color:${t.type==='add'?'var(--green)':'var(--red)'}">${t.type==='add'?'+':'−'}${fmt(t.amount)}</div>
       <div class="meta">${t.label?t.label+' · ':''}${t.date}</div></div>
-      <button class="entry-del" onclick="delBalanceTxn('${t.id}')">Remove</button>
+      <div class="entry-actions">
+        <button class="entry-edit" onclick="editBalanceTxn('${t.id}')">Edit</button>
+        <button class="entry-del" onclick="delBalanceTxn('${t.id}')">Remove</button>
+      </div>
     </div>`).join('');
 }
+let editingBalanceTxnId=null;
+function editBalanceTxn(id){
+  const t=balanceTxns.find(x=>x.id===id);
+  editingBalanceTxnId=id;
+  document.getElementById('balanceSheetTitle').textContent='Edit Entry ('+(t.type==='add'?'Add':'Subtract')+')';
+  document.getElementById('balanceAmtInput').value=t.amount;
+  document.getElementById('balanceLabelInput').value=t.label||'';
+  document.getElementById('balanceDateInput').value=t.date;
+  openSheet('balanceSheet','balanceBackdrop');
+}
+window.editBalanceTxn=editBalanceTxn;
 function delBalanceTxn(id){ balanceTxns=balanceTxns.filter(t=>t.id!==id); saveBalanceTxns(balanceTxns); renderBalance(); showToast('Entry removed'); }
 window.delBalanceTxn=delBalanceTxn;
 function openBalanceSheet(){
+  editingBalanceTxnId=null;
+  document.getElementById('balanceSheetTitle').textContent='Available Balance';
   document.getElementById('balanceAmtInput').value='';
   document.getElementById('balanceLabelInput').value='';
+  document.getElementById('balanceDateInput').value=today;
   renderBalance();
   openSheet('balanceSheet','balanceBackdrop');
 }
@@ -384,6 +415,7 @@ document.getElementById('editGoalBtn').addEventListener('click', ()=>{
   const g=goals.find(x=>x.id===activeGoalId);
   document.getElementById('editGoalNameInput').value=g.name;
   document.getElementById('editGoalTargetInput').value=g.target;
+  document.getElementById('editGoalDeadlineInput').value=g.deadline||'';
   openSheet('editGoalSheet','editGoalBackdrop');
 });
 document.getElementById('editGoalBackdrop').addEventListener('click', ()=>closeSheet('editGoalSheet','editGoalBackdrop'));
@@ -392,7 +424,7 @@ document.getElementById('editGoalSaveBtn').addEventListener('click', ()=>{
   const target=parseFloat(document.getElementById('editGoalTargetInput').value);
   if(!name||!target||target<=0){ showToast('Enter a goal name and target amount'); return; }
   const g=goals.find(x=>x.id===activeGoalId);
-  g.name=name; g.target=target;
+  g.name=name; g.target=target; g.deadline=document.getElementById('editGoalDeadlineInput').value||'';
   save(goals);
   document.getElementById('detTitle').textContent=name;
   closeSheet('editGoalSheet','editGoalBackdrop');
@@ -402,33 +434,60 @@ document.getElementById('editGoalSaveBtn').addEventListener('click', ()=>{
 
 function renderInsight(g, saved){
   const el=document.getElementById('insightCard');
+  const now=new Date(today+'T00:00:00');
+
   if(saved>=g.target){
     el.innerHTML=`<div style="font-weight:700;">🎉 Goal complete — nice work!</div>`;
     return;
   }
   if(!g.entries.length){
-    el.innerHTML=`<div style="color:var(--sub); font-size:.85rem;">Add your first entry to see a savings pace and projected finish date.</div>`;
+    el.innerHTML=`<div style="color:var(--sub); font-size:.85rem;">Add your first entry to see a savings pace${g.deadline?' and whether you\'re on track':' and projected finish date'}.</div>`;
     return;
   }
+
   const sorted=[...g.entries].sort((a,b)=>a.date.localeCompare(b.date));
   const first=new Date(sorted[0].date+'T00:00:00');
-  const now=new Date(today+'T00:00:00');
   const daysElapsed=Math.max(1, Math.round((now-first)/86400000));
   const perWeek=(saved/daysElapsed)*7;
+  const remaining=g.target-saved;
+
   if(perWeek<=0){
-    el.innerHTML=`<div style="color:var(--sub); font-size:.85rem;">Keep adding savings to see your pace and projected finish date.</div>`;
+    el.innerHTML=`<div style="color:var(--sub); font-size:.85rem;">Keep adding savings to see your pace${g.deadline?' and whether you\'re on track':''}.</div>`;
     return;
   }
-  const remaining=g.target-saved;
-  const daysNeeded=Math.ceil(remaining/(perWeek/7));
-  const projected=new Date(now.getTime()+daysNeeded*86400000);
-  const projStr=projected.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
-  el.innerHTML=`
-    <div style="font-size:.72rem; color:var(--sub); font-weight:700; text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px;">Your Pace</div>
-    <div style="display:flex; justify-content:space-between; align-items:baseline;">
-      <div style="font-weight:800; font-size:1.1rem;">${fmt(perWeek)}<span style="font-size:.75rem; color:var(--sub); font-weight:600;">/week</span></div>
+
+  const paceLine=`<div style="font-size:.72rem; color:var(--sub); font-weight:700; text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px;">Your Pace</div>
+    <div style="font-weight:800; font-size:1.1rem;">${fmt(perWeek)}<span style="font-size:.75rem; color:var(--sub); font-weight:600;">/week</span></div>`;
+
+  if(!g.deadline){
+    const daysNeeded=Math.ceil(remaining/(perWeek/7));
+    const projected=new Date(now.getTime()+daysNeeded*86400000);
+    const projStr=projected.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+    el.innerHTML=`${paceLine}
+      <div style="color:var(--sub); font-size:.82rem; margin-top:4px;">At this pace, you'll hit your goal around <b style="color:var(--text)">${projStr}</b></div>`;
+    return;
+  }
+
+  // Deadline set — compare pace to what's required
+  const deadlineDate=new Date(g.deadline+'T00:00:00');
+  const daysLeft=Math.round((deadlineDate-now)/86400000);
+  const deadlineStr=deadlineDate.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+
+  if(daysLeft<=0){
+    el.innerHTML=`${paceLine}
+      <div style="color:var(--red); font-size:.82rem; margin-top:6px; font-weight:600;">⏰ Target date (${deadlineStr}) has passed — still ${fmt(remaining)} to go</div>`;
+    return;
+  }
+
+  const requiredPerWeek=remaining/(daysLeft/7);
+  const onTrack=perWeek>=requiredPerWeek;
+  el.innerHTML=`${paceLine}
+    <div style="margin-top:8px; font-size:.82rem; ${onTrack?'color:var(--green)':'color:var(--red)'}; font-weight:700;">
+      ${onTrack?'✅ On track for':'⚠️ Behind pace for'} ${deadlineStr}
     </div>
-    <div style="color:var(--sub); font-size:.82rem; margin-top:4px;">At this pace, you'll hit your goal around <b style="color:var(--text)">${projStr}</b></div>`;
+    <div style="color:var(--sub); font-size:.8rem; margin-top:2px;">
+      ${onTrack ? `You need ${fmt(requiredPerWeek)}/week — you're ahead or right on pace.` : `You need ${fmt(requiredPerWeek)}/week to make it, vs your current ${fmt(perWeek)}/week.`}
+    </div>`;
 }
 
 function renderDetail(){
@@ -443,7 +502,7 @@ function renderDetail(){
   if(!g.entries.length){ list.innerHTML='<div class="empty">No entries yet</div>'; return; }
   const sorted=[...g.entries].sort((a,b)=>b.date.localeCompare(a.date));
   list.innerHTML=sorted.map(e=>`<div class="entry-row">
-      <div><div class="amt">${fmt(e.amount)}</div><div class="meta">${e.label?e.label+' · ':''}${e.date}</div></div>
+      <div><div class="amt" style="${e.amount<0?'color:var(--red)':''}">${e.amount<0?'−'+fmt(Math.abs(e.amount)):fmt(e.amount)}</div><div class="meta">${e.label?e.label+' · ':''}${e.date}</div></div>
       <div class="entry-actions">
         <button class="entry-edit" onclick="editEntry('${e.id}')">Edit</button>
         <button class="entry-del" onclick="delEntry('${e.id}')">Remove</button>
@@ -478,6 +537,7 @@ function closeSheet(sheetId, backdropId){ document.getElementById(sheetId).class
 
 document.getElementById('fab').addEventListener('click', ()=>{
   document.getElementById('goalNameInput').value=''; document.getElementById('goalTargetInput').value='';
+  document.getElementById('goalDeadlineInput').value='';
   openSheet('goalSheet','goalBackdrop');
 });
 document.getElementById('goalBackdrop').addEventListener('click', ()=>closeSheet('goalSheet','goalBackdrop'));
@@ -485,7 +545,8 @@ document.getElementById('saveGoalBtn').addEventListener('click', ()=>{
   const name=document.getElementById('goalNameInput').value.trim();
   const target=parseFloat(document.getElementById('goalTargetInput').value);
   if(!name||!target||target<=0){ showToast('Enter a goal name and target amount'); return; }
-  goals.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2), name, target, entries:[]});
+  const deadline=document.getElementById('goalDeadlineInput').value||'';
+  goals.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2), name, target, deadline, entries:[]});
   save(goals); closeSheet('goalSheet','goalBackdrop'); renderList();
   showToast('Goal created 🎯');
 });
@@ -498,6 +559,37 @@ document.getElementById('quickChips').addEventListener('click', e=>{
   btn.classList.add('active');
   document.getElementById('amtInput').value = btn.dataset.a;
 });
+document.getElementById('entryBackdrop').addEventListener('click', ()=>{ closeSheet('entrySheet','entryBackdrop'); editingEntryId=null; });
+
+document.getElementById('transferQuickBtn').addEventListener('click', ()=>{
+  const others=goals.filter(g=>g.id!==activeGoalId);
+  if(!others.length){ showToast('Create another goal first to transfer to'); return; }
+  const sel=document.getElementById('transferDestSelect');
+  sel.innerHTML=others.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+  document.getElementById('transferAmtInput').value='';
+  openSheet('transferSheet','transferBackdrop');
+});
+document.getElementById('transferBackdrop').addEventListener('click', ()=>closeSheet('transferSheet','transferBackdrop'));
+document.getElementById('transferBtn').addEventListener('click', ()=>{
+  const amount=parseFloat(document.getElementById('transferAmtInput').value);
+  if(!amount||amount<=0){ showToast('Enter a valid amount'); return; }
+  const source=goals.find(x=>x.id===activeGoalId);
+  const destId=document.getElementById('transferDestSelect').value;
+  const dest=goals.find(x=>x.id===destId);
+  if(!dest){ showToast('Pick a goal to transfer to'); return; }
+  const sourceSaved=totalSaved(source);
+  if(amount>sourceSaved){ showToast(`"${source.name}" only has ${fmt(sourceSaved)} to transfer`); return; }
+  const rounded=Math.round(amount*100)/100;
+  source.entries.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2), amount:-rounded,
+    label:`Transferred to ${dest.name}`, date:today});
+  dest.entries.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2)+'x', amount:rounded,
+    label:`Transferred from ${source.name}`, date:today});
+  save(goals);
+  closeSheet('transferSheet','transferBackdrop');
+  renderDetail(); renderList();
+  showToast(`Transferred ${fmt(rounded)} to "${dest.name}"`);
+});
+
 document.getElementById('quickAddBtn').addEventListener('click', ()=>{
   editingEntryId=null;
   document.getElementById('entrySheetTitle').textContent='Add Savings';
@@ -507,7 +599,6 @@ document.getElementById('quickAddBtn').addEventListener('click', ()=>{
   document.querySelectorAll('#quickChips .chip').forEach(c=>c.classList.remove('active'));
   openSheet('entrySheet','entryBackdrop');
 });
-document.getElementById('entryBackdrop').addEventListener('click', ()=>{ closeSheet('entrySheet','entryBackdrop'); editingEntryId=null; });
 document.getElementById('addEntryBtn').addEventListener('click', ()=>{
   const amount=parseFloat(document.getElementById('amtInput').value);
   if(!amount||amount<=0){ showToast('Enter a valid amount'); return; }
@@ -535,12 +626,23 @@ document.getElementById('addEntryBtn').addEventListener('click', ()=>{
   showToast(nowDone && !wasDone ? `🎉 "${g.name}" goal reached!` : 'Savings added');
 });
 
-document.getElementById('balanceBackdrop').addEventListener('click', ()=>closeSheet('balanceSheet','balanceBackdrop'));
+document.getElementById('balanceBackdrop').addEventListener('click', ()=>{ closeSheet('balanceSheet','balanceBackdrop'); editingBalanceTxnId=null; });
 document.getElementById('balanceAddBtn').addEventListener('click', ()=>{
   const amt=parseFloat(document.getElementById('balanceAmtInput').value);
   if(!amt||amt<=0){ showToast('Enter a valid amount'); return; }
-  balanceTxns.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2), type:'add', amount:Math.round(amt*100)/100,
-    label:document.getElementById('balanceLabelInput').value.trim(), date:today});
+  const date=document.getElementById('balanceDateInput').value || today;
+  const label=document.getElementById('balanceLabelInput').value.trim();
+  if(editingBalanceTxnId){
+    const t=balanceTxns.find(x=>x.id===editingBalanceTxnId);
+    t.type='add'; t.amount=Math.round(amt*100)/100; t.label=label; t.date=date;
+    editingBalanceTxnId=null;
+    saveBalanceTxns(balanceTxns); renderBalance();
+    document.getElementById('balanceSheetTitle').textContent='Available Balance';
+    document.getElementById('balanceAmtInput').value=''; document.getElementById('balanceLabelInput').value='';
+    showToast('Entry updated');
+    return;
+  }
+  balanceTxns.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2), type:'add', amount:Math.round(amt*100)/100, label, date});
   saveBalanceTxns(balanceTxns); renderBalance();
   document.getElementById('balanceAmtInput').value=''; document.getElementById('balanceLabelInput').value='';
   showToast('Added to balance');
@@ -548,8 +650,19 @@ document.getElementById('balanceAddBtn').addEventListener('click', ()=>{
 document.getElementById('balanceSubBtn').addEventListener('click', ()=>{
   const amt=parseFloat(document.getElementById('balanceAmtInput').value);
   if(!amt||amt<=0){ showToast('Enter a valid amount'); return; }
-  balanceTxns.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2), type:'subtract', amount:Math.round(amt*100)/100,
-    label:document.getElementById('balanceLabelInput').value.trim(), date:today});
+  const date=document.getElementById('balanceDateInput').value || today;
+  const label=document.getElementById('balanceLabelInput').value.trim();
+  if(editingBalanceTxnId){
+    const t=balanceTxns.find(x=>x.id===editingBalanceTxnId);
+    t.type='subtract'; t.amount=Math.round(amt*100)/100; t.label=label; t.date=date;
+    editingBalanceTxnId=null;
+    saveBalanceTxns(balanceTxns); renderBalance();
+    document.getElementById('balanceSheetTitle').textContent='Available Balance';
+    document.getElementById('balanceAmtInput').value=''; document.getElementById('balanceLabelInput').value='';
+    showToast('Entry updated');
+    return;
+  }
+  balanceTxns.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2), type:'subtract', amount:Math.round(amt*100)/100, label, date});
   saveBalanceTxns(balanceTxns); renderBalance();
   document.getElementById('balanceAmtInput').value=''; document.getElementById('balanceLabelInput').value='';
   showToast('Subtracted from balance');
